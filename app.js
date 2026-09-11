@@ -42,6 +42,12 @@ const state=Object.assign({screen:'target',session:null},JSON.parse(JSON.stringi
 const PERSISTED=['goal','equipment','anon','progress','completed','streak','minutes','onboarded','history'];
 function persist(){const data={};PERSISTED.forEach(k=>data[k]=state[k]);return Store.save(data)}
 
+// store.js should have defined this. If it failed to load, fall back to an
+// in-memory stub so the app degrades to "forgetful but working" instead of blank.
+if(typeof Store==='undefined'){
+ window.Store={init:async()=>'none',load:async()=>null,save:async()=>false,reset:async()=>{},mode:'none',status:'Storage unavailable'};
+}
+
 function iconCircle(symbol){return `<div class="option-icon"><b style="font-size:19px">${symbol}</b></div>`}
 function repLabel(v){return typeof v==='number'?v+' reps':v}
 function clock(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
@@ -194,10 +200,15 @@ async function resetProgress(){
 
 async function boot(){
  render();                       // paint defaults immediately, then reconcile
- await Store.init();
- const saved=await Store.load();
- if(saved)PERSISTED.forEach(k=>{if(saved[k]!==undefined)state[k]=saved[k]});
- state.screen=state.onboarded?'dashboard':'target';
- render();
+ try{
+  await Store.init();
+  const saved=await Store.load();
+  if(saved)PERSISTED.forEach(k=>{if(saved[k]!==undefined)state[k]=saved[k]});
+  state.screen=state.onboarded?'dashboard':'target';
+  render();
+ }catch(err){
+  // Storage is optional — never let it take the whole app down.
+  console.warn('[Zaman Fitness] Continuing without saved state:',err&&err.message);
+ }
 }
 boot();
