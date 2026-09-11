@@ -1,11 +1,39 @@
 rules_version = '2';
 
-// Each signed-in user (including anonymous users) may read and write only their
-// own document. Nothing else in the database is reachable from the client.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // An admin is simply a document in /admins keyed by the user's uid.
+    // Create the first one by hand in the Firebase console; after that an
+    // admin can add others from the panel.
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Each signed-in user owns exactly their own document. Guests never reach
+    // Firestore at all - their data stays in the browser.
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // The catalogue is world-readable so guests and signed-out visitors see
+    // published workouts, but only admins can change it.
+    match /exercises/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /workouts/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // A user may check whether they themselves are an admin. Only admins can
+    // see the whole list or grant and revoke access.
+    match /admins/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isAdmin();
     }
   }
 }

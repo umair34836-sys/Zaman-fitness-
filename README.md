@@ -1,123 +1,142 @@
-# Zaman Fitness — Frontend Prototype
+# Zaman Fitness
 
-Static, GitHub Pages-friendly fitness planner inspired by the supplied reference video.
+A workout app that builds each session around the user's goal and the equipment
+they actually own, walks them through it set by set, and tracks the weight they
+lift. Static HTML, CSS and vanilla JavaScript — no build step — with Firebase
+for accounts and the admin-managed catalogue.
 
-## Included
-- Goal onboarding
-- Equipment selection/search
-- Personalized dashboard
-- Workout details with live set progress
-- Goal- and equipment-aware workout generation from a 42-exercise library
-- Full exercise flow — every set of every exercise, with a rest timer between sets
-- Workout completion screen with real session totals
-- Progress, history and profile
-- Accounts: start as a guest, upgrade to Google or email without losing history
-- Per-set weight logging, carried forward session to session
-- Installable as an app, and fully usable offline
-- Admin view (`#admin`) for this account's totals and the exercise library
-- Inline SVG icons and illustration assets — no paid/stock assets required
-- Reduced-motion support and responsive layouts
+## How a visitor moves through it
 
-## Stack
-- HTML5
-- CSS3
-- Vanilla JavaScript
-- Firebase (Auth + Firestore), loaded from the CDN as ES modules
-- Google Fonts (DM Sans + Manrope)
-- No React / Next.js / build step
+1. **Visitor page** — everything about the app: what it does, how it works, and
+   a FAQ. Nothing is stored and no account exists yet.
+2. **Create an account, or continue as a guest.** There is no silent or
+   anonymous sign-in: a visitor is only ever a registered user or an explicit
+   guest, by their own choice.
+3. **Onboarding** — pick a goal, tick the equipment you own.
+4. **Train** — build a session or pick a published plan, then follow it set by
+   set with rest timers, tutorial videos and weight logging.
 
-## Run
-Open `index.html` directly, or serve the folder with any static server:
+### Accounts vs guest
 
-```sh
-python3 -m http.server 8000
-```
+| | Account | Guest |
+| --- | --- | --- |
+| Where data lives | Firestore, under your uid | `localStorage`, this device only |
+| Works on another device | Yes | No |
+| Survives clearing the browser | Yes | No |
+| Needed to use the app | No | — |
 
-Firebase needs a real HTTP origin, so prefer the static server over opening the
-file from disk. With no server and no network the app still runs — it just falls
-back to local storage.
+A guest who later registers keeps everything: `Store.adoptLocalInto()` copies
+the local record into the new account before clearing it.
 
-## Persistence
+## Admin panel
 
-`store.js` picks a backend at runtime:
+Open at `#admin`, or from Profile → Admin when your account has access.
 
-| Condition | Backend |
+- **Exercises** — add, edit and delete; each carries its own **tutorial video
+  link**, used everywhere that exercise appears. Left blank, the app links to a
+  YouTube search for the exercise instead of a dead link.
+- **Workouts** — create new plans and edit the built-in ones. Pick the goal,
+  write a description, add exercises, set the reps and rest per exercise,
+  reorder them, and publish or hide the plan.
+- **Admins** — grant and revoke admin access by user ID.
+
+Admin status is a document in the `admins` collection keyed by uid. The
+Firestore rules check the same thing, so hiding the button is convenience, not
+security — a non-admin cannot write to the catalogue even if they reach the URL.
+
+## Firebase setup
+
+The app is wired to the `zaman-fitness` project in `firebase-config.js`. In the
+Firebase console:
+
+1. **Authentication → Sign-in method** — enable **Email/Password** and
+   **Google**. (Anonymous is deliberately *not* used.)
+2. **Authentication → Settings → Authorized domains** — add
+   `umair34836-sys.github.io`, or sign-in is rejected on the live site.
+3. **Firestore Database** — create a database.
+4. **Firestore → Rules** — paste [`firestore.rules`](firestore.rules).
+
+### Making yourself the first admin
+
+The rules let admins manage admins, so the first one is created by hand:
+
+1. Sign in to the app with the account you want to be the admin.
+2. Go to **Profile → Account** and copy **Your user ID**.
+3. In the Firebase console, open **Firestore → Start collection**, name it
+   `admins`, and create a document whose **Document ID is that user ID**. Add a
+   field `email` (string) with your email address.
+4. Reload the app. Profile now shows **Open admin panel**.
+
+After that you can add other admins from the panel itself.
+
+### Getting the catalogue into Firestore
+
+The app ships with its full library built in, so it works before Firestore has
+anything in it. To make that library editable, open the admin panel and press
+**Import built-in catalogue** on the Overview tab. It writes the exercises and
+workouts as documents and never overwrites an existing one, so it is safe to
+run again.
+
+## Data model
+
+| Collection | Document | Who can read | Who can write |
+| --- | --- | --- | --- |
+| `users` | one per uid: goal, equipment, history, lastWeights | that user | that user |
+| `exercises` | name, muscles, pattern, needs[], unit, load, **video** | everyone | admins |
+| `workouts` | name, goal, description, published, items[] | everyone | admins |
+| `admins` | keyed by uid, holds email | that uid, or any admin | admins |
+
+The catalogue is world-readable on purpose, so guests and signed-out visitors
+still see published plans.
+
+## Files
+
+| File | Purpose |
 | --- | --- |
-| `firebase-config.js` filled in and reachable | Firestore, signed in anonymously |
-| Config blank, offline, or the SDK is blocked | `localStorage` |
+| `index.html` | Shell, PWA metadata, and a boot error handler that reports a failure on screen instead of a blank page |
+| `styles.css` | Design system |
+| `data.js` | Built-in exercises, workouts, goals, schemes and the generator |
+| `backend.js` | Firebase: auth, Firestore, admin check |
+| `store.js` | User data — routes to the account or to this device |
+| `app.js` | Screens, router and the workout session |
+| `admin.js` | Admin panel |
+| `sw.js`, `manifest.webmanifest`, `icons/` | Installable app and offline support |
+| `firestore.rules` | Security rules |
 
-Either way the app keeps working — the profile screen shows which backend is
-live. State is stored per user at `users/{uid}`: goal, equipment, anonymous
-flag, streak, workouts completed, total minutes, weekly progress and history.
-The in-progress workout session is deliberately **not** persisted, so a reload
-never drops you back into a half-finished set.
+## How sessions are built
 
-### Firebase setup
+Each goal sets the reps and rest:
 
-The project is already wired to the `zaman-fitness` Firebase project in
-`firebase-config.js`. To finish the setup in the Firebase console:
-
-1. **Authentication → Sign-in method →** enable **Anonymous**, **Google** and
-   **Email/Password**. All three are used: guests get Anonymous, and upgrading
-   links a Google or email credential onto that same account.
-2. **Firestore Database →** create a database.
-3. **Firestore → Rules →** paste the contents of [`firestore.rules`](firestore.rules).
-4. **Authentication → Settings → Authorized domains →** add the GitHub Pages
-   host (`umair34836-sys.github.io`) and any custom domain, or anonymous
-   sign-in will be rejected on the deployed site.
-
-The values in `firebase-config.js` are public project identifiers, not secrets.
-Firebase web apps are designed to ship them in client code; access is controlled
-by the security rules above, which is why step 3 matters.
-
-## Accounts
-
-Everyone is signed in anonymously on first load, so the app works with no
-sign-up. Creating an account calls `linkWithCredential` / `linkWithPopup`
-rather than a fresh sign-in, which keeps the same Firebase uid — and therefore
-the same Firestore document — so a guest's history carries over intact. Signing
-into a different existing account swaps to that account's data instead.
-
-## Install and offline
-
-`manifest.webmanifest` plus `sw.js` make the app installable ("Add to Home
-Screen") and usable with no connection. The service worker caches the app shell
-and serves it cache-first; Firebase and font requests always go to the network,
-and `store.js` falls back to localStorage when they fail. Bump `VERSION` in
-`sw.js` when shipping changes so clients pick them up.
-
-## Deployment
-
-`.github/workflows/pages.yml` publishes the repository root to GitHub Pages on
-every push. Enable it once under **Settings → Pages → Source → GitHub Actions**.
-
-## Design reference
-The visual direction follows the supplied mobile video: compact 384px-style mobile composition, light neutral canvas, olive fitness green, rounded cards, progress bars/rings, workout metrics, exercise flow and completion state. The provided UI/UX Pro Max source was used as the design-system reference; the fitness category recommends progress tracking, workout plans, achievements and motivational interactions.
-
-## How workouts are built
-
-`workouts.js` holds the exercise library (42 exercises tagged by movement
-pattern and required equipment) and the generator. `generateWorkout(goal,
-equipment)` filters the library to gear the user actually owns, fills a
-push/pull/legs/core rotation without repeating an exercise, and applies a
-set/rep/rest scheme chosen by goal:
-
-| Goal | Scheme | Rest |
+| Goal | Sets × reps | Rest |
 | --- | --- | --- |
 | Lose Weight | 3 × 15 | 35s |
 | Gain Muscle | 12/10/8/8 | 75s |
 | Gain Strength | 5/5/3/3/3 | 150s |
 | Look Bigger | 12/12/10/10 | 70s |
 
-Strength sessions get fewer movements so the long rests still fit in an hour,
-and loaded exercises are preferred over bodyweight ones whenever the user has
-the equipment — a 3-rep set only means something you can add weight to.
+The generator fills a push / pull / legs / core rotation from exercises the user
+has equipment for, never repeats an exercise within a session, prefers loaded
+work over bodyweight when the gear is there, and gives strength sessions fewer
+movements so the long rests still fit in an hour.
 
-## What is real, and what is not
+## Running locally
 
-- Real: workout generation, the exercise flow, set and rest tracking, session
-  totals, history, streaks, weekly charts and persistence. Every figure on the
-  dashboard is recomputed from logged history — a new account starts at zero.
-- Not real: there is no fleet-wide admin. `#admin` shows the signed-in user's
-  own numbers plus the exercise library; aggregate reporting across all users
-  needs a backend query layer that has not been built.
+```sh
+python3 -m http.server 8000
+```
+
+Use a server rather than opening the file directly — Firebase and service
+workers need a real HTTP origin. With no network the app still runs; accounts
+are disabled and guest mode is offered instead.
+
+## Deployment
+
+`.github/workflows/pages.yml` publishes the repository root to GitHub Pages on
+every push. Enable it once under **Settings → Pages → Source → GitHub Actions**.
+Bump `VERSION` in `sw.js` when shipping changes so installed clients update.
+
+## What is not built
+
+There is no fleet-wide reporting across all users — the admin Overview counts
+the catalogue, not the user base. Aggregating that needs a backend query layer
+(Cloud Functions), which would require the paid Firebase plan.

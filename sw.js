@@ -5,14 +5,15 @@
 // localStorage when the network is gone, and a stale auth or Firestore response
 // would be worse than no response.
 
-const VERSION = 'zf-v5';
+const VERSION = 'zf-v6';
 const SHELL = [
   './',
   'index.html',
   'styles.css',
-  'workouts.js',
-  'auth.js',
+  'data.js',
+  'backend.js',
   'store.js',
+  'admin.js',
   'app.js',
   'firebase-config.js',
   'manifest.webmanifest',
@@ -43,7 +44,7 @@ self.addEventListener('activate', event => {
 
 function isAppAsset(url) {
   if (url.origin !== self.location.origin) return false;
-  return !url.pathname.endsWith('/test.html');
+  return true;
 }
 
 self.addEventListener('fetch', event => {

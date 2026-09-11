@@ -1,133 +1,105 @@
-// Zaman Fitness — persistence layer.
-//
-// Presents one small async API (init / load / save / reset) to app.js and picks
-// its backend at runtime: Firestore when firebase-config.js is filled in and
-// reachable, otherwise localStorage. Every path is guarded, so a missing config,
-// a blocked CDN or a private-mode localStorage all degrade to a working (if
-// forgetful) app rather than a broken one.
-//
-// The Firestore document is resolved from the CURRENT user on every call, so
-// when an anonymous account is upgraded or a different account signs in, reads
-// and writes follow without needing a reload.
+/* Zaman Fitness — user data.
+ *
+ * Two modes, chosen by how the person entered the app:
+ *   account — their document in Firestore, available on any device
+ *   guest   — localStorage on this device only, no account anywhere
+ *
+ * A guest who later registers keeps their data: register() in app.js hands the
+ * local copy to the new account before clearing it.
+ */
 const Store = (function () {
-  const LOCAL_KEY = 'zaman-fitness-state';
-  const SDK = 'https://www.gstatic.com/firebasejs/12.19.0';
+  const KEY = 'zaman-fitness-user';
+  const MODE_KEY = 'zaman-fitness-mode';
+  const VERSION = 1;
 
-  let mode = 'local';   // 'local' | 'firebase'
-  let status = 'Local storage';
-  let fs = null;        // firebase-firestore module
-  let db = null;
-  let authInstance = null;
+  const BLANK = {
+    v: VERSION, name: '', goal: 'muscle', equipment: ['Bodyweight & No Equipment'],
+    onboarded: false, history: [], lastWeights: {}, weeklyTarget: 5
+  };
 
-  function configured() {
-    const c = window.firebaseConfig || {};
-    return Boolean(c.apiKey && c.projectId && c.appId);
+  let mode = 'none';   // 'none' | 'guest' | 'account'
+  let data = clone(BLANK);
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function localRead() {
+    try { const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }
+  }
+  function localWrite(d) {
+    try { localStorage.setItem(KEY, JSON.stringify(d)); return true; } catch (e) { return false; }
+  }
+  function localClear() {
+    try { localStorage.removeItem(KEY); localStorage.removeItem(MODE_KEY); } catch (e) {}
   }
 
-  function describe(user) {
-    if (!user) return 'Firebase · signed out';
-    return user.isAnonymous
-      ? 'Firebase · guest ' + user.uid.slice(0, 6)
-      : 'Firebase · ' + (user.email || user.displayName || 'account');
+  function rememberMode(m) { try { localStorage.setItem(MODE_KEY, m); } catch (e) {} }
+  function savedMode() { try { return localStorage.getItem(MODE_KEY) || 'none'; } catch (e) { return 'none'; } }
+
+  function merge(loaded) {
+    const base = clone(BLANK);
+    if (loaded && loaded.v === VERSION) {
+      Object.keys(base).forEach(k => { if (loaded[k] !== undefined) base[k] = loaded[k]; });
+    }
+    return base;
   }
 
-  // Resolves once a backend is chosen. Never rejects — callers get whichever
-  // mode we managed to reach.
-  async function init() {
-    if (!configured()) {
-      status = 'Local storage · Firebase not configured';
-      return mode;
-    }
-    try {
-      const [app, authMod, firestore] = await Promise.all([
-        import(`${SDK}/firebase-app.js`),
-        import(`${SDK}/firebase-auth.js`),
-        import(`${SDK}/firebase-firestore.js`)
-      ]);
-      const instance = app.initializeApp(window.firebaseConfig);
-      authInstance = authMod.getAuth(instance);
+  /* ---- entering a mode ---- */
 
-      // Wait for any persisted session before creating a guest, otherwise a
-      // returning signed-in user would be replaced by a brand new anonymous one.
-      const existing = await new Promise(resolve => {
-        const stop = authMod.onAuthStateChanged(authInstance, u => { stop(); resolve(u); });
-      });
-      const user = existing || (await authMod.signInAnonymously(authInstance)).user;
-
-      fs = firestore;
-      db = firestore.getFirestore(instance);
-      mode = 'firebase';
-      status = describe(user);
-
-      if (typeof Auth !== 'undefined') {
-        Auth.attach(authMod, authInstance, user);
-        Auth.onChange(u => { status = describe(u); });
-      }
-    } catch (err) {
-      status = 'Local storage · Firebase unreachable';
-      console.warn('[Zaman Fitness] Falling back to localStorage:', err && err.message);
-    }
-    return mode;
+  async function useAccount() {
+    mode = 'account';
+    rememberMode('account');
+    data = merge(await Backend.loadProfile());
+    return data;
   }
 
-  function ref() {
-    const user = authInstance && authInstance.currentUser;
-    if (!user || !fs || !db) return null;
-    return fs.doc(db, 'users', user.uid);
+  function useGuest() {
+    mode = 'guest';
+    rememberMode('guest');
+    data = merge(localRead());
+    return data;
   }
 
-  async function load() {
-    const r = mode === 'firebase' ? ref() : null;
-    if (r) {
-      try {
-        const snap = await fs.getDoc(r);
-        return snap.exists() ? snap.data() : null;
-      } catch (err) {
-        console.warn('[Zaman Fitness] Load failed:', err && err.message);
-        return null;
-      }
-    }
-    try {
-      const raw = localStorage.getItem(LOCAL_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (err) {
-      return null;
-    }
+  function leave() { mode = 'none'; rememberMode('none'); data = clone(BLANK); }
+
+  /* ---- reading and writing ---- */
+
+  function get() { return data; }
+  function set(patch) { Object.assign(data, patch); return save(); }
+
+  async function save() {
+    data.v = VERSION;
+    if (mode === 'account') return Backend.saveProfile(data);
+    if (mode === 'guest') return localWrite(data);
+    return false;
   }
 
-  async function save(data) {
-    const r = mode === 'firebase' ? ref() : null;
-    if (r) {
-      try {
-        await fs.setDoc(r, data, { merge: true });
-        return true;
-      } catch (err) {
-        console.warn('[Zaman Fitness] Save failed:', err && err.message);
-        return false;
-      }
-    }
-    try {
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
-      return true;
-    } catch (err) {
-      return false;
-    }
+  // Called when a guest registers: carry what they already did into the account.
+  async function adoptLocalInto() {
+    const local = localRead();
+    if (!local) return false;
+    const merged = merge(local);
+    const remote = merge(await Backend.loadProfile());
+    // Keep the longer history; a brand new account has none.
+    if (remote.history.length > merged.history.length) return false;
+    data = merged;
+    mode = 'account';
+    rememberMode('account');
+    await Backend.saveProfile(data);
+    localClear();
+    return true;
   }
 
-  async function reset() {
-    const r = mode === 'firebase' ? ref() : null;
-    if (r) {
-      try { await fs.deleteDoc(r); }
-      catch (err) { console.warn('[Zaman Fitness] Reset failed:', err && err.message); }
-    }
-    try { localStorage.removeItem(LOCAL_KEY); }
-    catch (err) { /* private mode — nothing to clear */ }
+  async function wipe() {
+    if (mode === 'account') await Backend.deleteProfile();
+    localClear();
+    data = clone(BLANK);
+    return data;
   }
 
   return {
-    init, load, save, reset,
-    get mode() { return mode; },
-    get uid() { const u = authInstance && authInstance.currentUser; return u ? u.uid : null; },
-    get status() { return status; }
+    useAccount, useGuest, leave, get, set, save, adoptLocalInto, wipe,
+    localClear, savedMode, hasLocal: () => Boolean(localRead()),
+    get mode() { return mode; }
   };
 })();
