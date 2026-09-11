@@ -1,0 +1,2 @@
+All visual assets in the prototype are original inline SVG/CSS shapes created for Zaman Fitness. No stock image dependency is required.
+Reference design intelligence: supplied UI UX Pro Max source package (v2.13.0), used as design-system guidance.
