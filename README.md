@@ -5,14 +5,14 @@ Static, GitHub Pages-friendly fitness planner inspired by the supplied reference
 ## Included
 - Goal onboarding
 - Equipment selection/search
-- Demo workout generation flow
 - Personalized dashboard
 - Workout details with live set progress
+- Goal- and equipment-aware workout generation from a 42-exercise library
 - Full exercise flow — every set of every exercise, with a rest timer between sets
 - Workout completion screen with real session totals
 - Progress, history and profile
 - Anonymous mode (Firebase anonymous auth, or local-only when offline)
-- Responsive admin console for users, exercises, workouts, goals and equipment
+- Admin view (`#admin`) for this account's totals and the exercise library
 - Inline SVG icons and illustration assets — no paid/stock assets required
 - Reduced-motion support and responsive layouts
 
@@ -74,11 +74,30 @@ every push. Enable it once under **Settings → Pages → Source → GitHub Acti
 ## Design reference
 The visual direction follows the supplied mobile video: compact 384px-style mobile composition, light neutral canvas, olive fitness green, rounded cards, progress bars/rings, workout metrics, exercise flow and completion state. The provided UI/UX Pro Max source was used as the design-system reference; the fitness category recommends progress tracking, workout plans, achievements and motivational interactions.
 
-## Prototype scope
+## How workouts are built
 
-Honest about what is and isn't real:
+`workouts.js` holds the exercise library (42 exercises tagged by movement
+pattern and required equipment) and the generator. `generateWorkout(goal,
+equipment)` filters the library to gear the user actually owns, fills a
+push/pull/legs/core rotation without repeating an exercise, and applies a
+set/rep/rest scheme chosen by goal:
 
-- The workout itself is a fixed plan in `app.js` (6 exercises, 21 sets). "Generate
-  Workout" replays a short loading state rather than calling a model.
-- The exercise flow, set/rest tracking, session totals and persistence are real.
-- Admin console figures are placeholder data; its buttons open a demo modal.
+| Goal | Scheme | Rest |
+| --- | --- | --- |
+| Lose Weight | 3 × 15 | 35s |
+| Gain Muscle | 12/10/8/8 | 75s |
+| Gain Strength | 5/5/3/3/3 | 150s |
+| Look Bigger | 12/12/10/10 | 70s |
+
+Strength sessions get fewer movements so the long rests still fit in an hour,
+and loaded exercises are preferred over bodyweight ones whenever the user has
+the equipment — a 3-rep set only means something you can add weight to.
+
+## What is real, and what is not
+
+- Real: workout generation, the exercise flow, set and rest tracking, session
+  totals, history, streaks, weekly charts and persistence. Every figure on the
+  dashboard is recomputed from logged history — a new account starts at zero.
+- Not real: there is no fleet-wide admin. `#admin` shows the signed-in user's
+  own numbers plus the exercise library; aggregate reporting across all users
+  needs a backend query layer that has not been built.
