@@ -10,3 +10,5 @@
 @media(min-width:801px){.phone-wrap{display:none}}
 @media(max-width:420px){.screen{padding-left:17px;padding-right:17px}.topbar{padding-left:17px;padding-right:17px}.bottom-cta{left:17px;right:17px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+/* workout session flow */
+.set-dots{display:flex;gap:7px;margin-top:14px;flex-wrap:wrap}.set-dot{width:30px;height:30px;border-radius:10px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;font-size:11px;font-weight:800;color:#9aa08f}.set-dot.active{background:var(--green);border-color:var(--green);color:#fff}.set-dot.done{background:var(--green-soft);border-color:#cbdca3;color:var(--green-dark)}.timer-card .spark{margin-bottom:12px}.timer-card .timer{color:var(--green-dark)}.exercise-row.done .exercise-copy strong{color:#9aa08f;text-decoration:line-through}.num-circle.filled{background:var(--green);color:#fff}.num-circle svg{width:14px;height:14px}
