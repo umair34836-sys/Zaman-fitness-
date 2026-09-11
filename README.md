@@ -11,7 +11,9 @@ Static, GitHub Pages-friendly fitness planner inspired by the supplied reference
 - Full exercise flow — every set of every exercise, with a rest timer between sets
 - Workout completion screen with real session totals
 - Progress, history and profile
-- Anonymous mode (Firebase anonymous auth, or local-only when offline)
+- Accounts: start as a guest, upgrade to Google or email without losing history
+- Per-set weight logging, carried forward session to session
+- Installable as an app, and fully usable offline
 - Admin view (`#admin`) for this account's totals and the exercise library
 - Inline SVG icons and illustration assets — no paid/stock assets required
 - Reduced-motion support and responsive layouts
@@ -55,7 +57,9 @@ never drops you back into a half-finished set.
 The project is already wired to the `zaman-fitness` Firebase project in
 `firebase-config.js`. To finish the setup in the Firebase console:
 
-1. **Authentication → Sign-in method →** enable **Anonymous**.
+1. **Authentication → Sign-in method →** enable **Anonymous**, **Google** and
+   **Email/Password**. All three are used: guests get Anonymous, and upgrading
+   links a Google or email credential onto that same account.
 2. **Firestore Database →** create a database.
 3. **Firestore → Rules →** paste the contents of [`firestore.rules`](firestore.rules).
 4. **Authentication → Settings → Authorized domains →** add the GitHub Pages
@@ -65,6 +69,22 @@ The project is already wired to the `zaman-fitness` Firebase project in
 The values in `firebase-config.js` are public project identifiers, not secrets.
 Firebase web apps are designed to ship them in client code; access is controlled
 by the security rules above, which is why step 3 matters.
+
+## Accounts
+
+Everyone is signed in anonymously on first load, so the app works with no
+sign-up. Creating an account calls `linkWithCredential` / `linkWithPopup`
+rather than a fresh sign-in, which keeps the same Firebase uid — and therefore
+the same Firestore document — so a guest's history carries over intact. Signing
+into a different existing account swaps to that account's data instead.
+
+## Install and offline
+
+`manifest.webmanifest` plus `sw.js` make the app installable ("Add to Home
+Screen") and usable with no connection. The service worker caches the app shell
+and serves it cache-first; Firebase and font requests always go to the network,
+and `store.js` falls back to localStorage when they fail. Bump `VERSION` in
+`sw.js` when shipping changes so clients pick them up.
 
 ## Deployment
 

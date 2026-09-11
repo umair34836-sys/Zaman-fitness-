@@ -18,13 +18,13 @@ if(typeof Store==='undefined'){
 
 const equipmentNames=EQUIPMENT.map(e=>e.name);
 const WEEKLY_TARGET=5;
-const STATE_VERSION=3;
+const STATE_VERSION=4;
 
 // A new account starts genuinely empty - every number on screen is earned.
-const defaults={goal:'Gain Muscle',equipment:['Bodyweight & No Equipment'],anon:true,onboarded:false,history:[],workout:null};
-const state=Object.assign({screen:'target',session:null,lastResult:null},JSON.parse(JSON.stringify(defaults)));
+const defaults={goal:'Gain Muscle',equipment:['Bodyweight & No Equipment'],anon:true,onboarded:false,history:[],workout:null,lastWeights:{}};
+const state=Object.assign({screen:'target',session:null,lastResult:null,accountMode:'create'},JSON.parse(JSON.stringify(defaults)));
 
-const PERSISTED=['goal','equipment','anon','onboarded','history','workout'];
+const PERSISTED=['goal','equipment','anon','onboarded','history','workout','lastWeights'];
 function persist(){const data={v:STATE_VERSION};PERSISTED.forEach(k=>data[k]=state[k]);return Store.save(data)}
 
 /* ---- derived statistics ----------------------------------------------
@@ -44,6 +44,8 @@ function streak(){
 }
 function totalMinutes(){return state.history.reduce((n,h)=>n+(h.minutes||0),0)}
 function totalSetsDone(){return state.history.reduce((n,h)=>n+(h.sets||0),0)}
+function totalVolume(){return state.history.reduce((n,h)=>n+(h.volume||0),0)}
+function fmtVolume(kg){return kg>=1000?(kg/1000).toFixed(1)+'k':String(Math.round(kg))}
 function thisWeek(){const s=startOfWeek();return state.history.filter(h=>new Date(h.at)>=s)}
 function thisMonthCount(){const now=new Date();return state.history.filter(h=>{const t=new Date(h.at);return t.getMonth()===now.getMonth()&&t.getFullYear()===now.getFullYear()}).length}
 function weeklyPct(){return Math.min(100,Math.round(thisWeek().length/WEEKLY_TARGET*100))}
@@ -110,31 +112,79 @@ function exerciseScreen(){
   return shell(`${header}<div class="screen"><div class="timer-card"><div class="spark">${icons.timer}</div><div class="eyebrow">Rest</div><div class="timer">${clock(s.restLeft)}</div><div class="progress-top"><span id="rest-bar" style="width:100%"></span></div><p class="sub" style="margin-top:12px">Up next — ${s.nextLabel}</p></div><button class="secondary" style="margin-top:14px" onclick="skipRest()">Skip rest →</button></div>`);
 
  if(s.phase==='work')
-  return shell(`${header}<div class="screen"><div class="eyebrow">Set ${s.setIndex+1} of ${ex.reps.length} — in progress</div><h1 class="h1">${ex.name}</h1><p class="sub">${ex.muscles}</p><div class="set-dots">${dots}</div><div class="timer-card" style="margin-top:14px"><div class="eyebrow">Target</div><div class="timer">${repLabel(reps)}</div><p class="sub">${ex.weight} · then ${ex.rest}s rest</p></div><div class="stat-grid" style="margin-top:10px"><div class="stat"><span>Sets done</span><strong>${s.setsDone}</strong><span>of ${planSets()}</span></div><div class="stat"><span>Reps</span><strong>${s.repsDone}</strong><span>total</span></div><div class="stat"><span>Elapsed</span><strong>${elapsedMinutes()}</strong><span>min</span></div></div></div><div class="bottom-cta"><button class="primary" onclick="completeSet()">${icons.check} Complete Set ${s.setIndex+1}</button></div>`);
+  return shell(`${header}<div class="screen"><div class="eyebrow">Set ${s.setIndex+1} of ${ex.reps.length} — in progress</div><h1 class="h1">${ex.name}</h1><p class="sub">${ex.muscles}</p><div class="set-dots">${dots}</div><div class="timer-card" style="margin-top:14px"><div class="eyebrow">Target</div><div class="timer">${repLabel(reps)}</div><p class="sub">${ex.weight} · then ${ex.rest}s rest</p>${typeof reps==='number'?`<div class="weight-row"><button class="step" onclick="bumpWeight(-2.5)" aria-label="Less weight">−</button><label class="weight-field"><input id="set-weight" type="number" inputmode="decimal" step="0.5" min="0" value="${state.lastWeights[ex.name]||0}"><span>kg</span></label><button class="step" onclick="bumpWeight(2.5)" aria-label="More weight">+</button></div><p class="sub" style="margin:8px 0 0;font-size:11px">${ex.weight==='Bodyweight'?'Added weight — leave at 0 for bodyweight':'Log what you actually lifted'}</p>`:''}</div><div class="stat-grid" style="margin-top:10px"><div class="stat"><span>Sets done</span><strong>${s.setsDone}</strong><span>of ${planSets()}</span></div><div class="stat"><span>Reps</span><strong>${s.repsDone}</strong><span>total</span></div><div class="stat"><span>Volume</span><strong>${fmtVolume(s.volume)}</strong><span>kg</span></div></div></div><div class="bottom-cta"><button class="primary" onclick="completeSet()">${icons.check} Complete Set ${s.setIndex+1}</button></div>`);
 
  return shell(`${header}<div class="screen"><div class="exercise-illustration"><svg viewBox="0 0 200 150" fill="none"><rect x="28" y="114" width="145" height="7" rx="3" fill="#9bb45d"/><path d="M60 113 82 68h37l22 45" stroke="#557817" stroke-width="7" stroke-linecap="round"/><circle cx="100" cy="48" r="15" fill="#c9d7a2"/><path d="M92 64 82 91m18-24 24 14m-34-7-20 22m40-12 15 29" stroke="#557817" stroke-width="7" stroke-linecap="round"/><path d="M42 77h115" stroke="#557817" stroke-width="6" stroke-linecap="round"/><path d="M38 67v20m124-20v20" stroke="#9aaf54" stroke-width="8" stroke-linecap="round"/></svg></div><div class="eyebrow">${ex.warmup?'Warm up':'Get ready'}</div><h1 class="h1">${ex.name}</h1><p class="sub">${ex.muscles}</p><div class="set-dots">${dots}</div><div class="option" style="margin-top:14px;background:#fff7e8;border-color:#f3d69c">${iconCircle('↗')}<div class="option-copy"><div class="option-title">Load</div><div class="option-meta">Stop 1–2 reps short of failure with clean form.</div></div><b style="color:#d28d1f">${ex.weight}</b></div><div class="stat-grid" style="margin-top:10px"><div class="stat"><span>Sets</span><strong>${ex.reps.length}</strong></div><div class="stat"><span>Target</span><strong>${repLabel(ex.reps[0])}</strong></div><div class="stat"><span>Rest</span><strong>${ex.rest}s</strong></div></div></div><div class="bottom-cta"><button class="primary" onclick="beginSet()">${icons.play} Start Set ${s.setIndex+1}</button></div>`)}
 
 function completeScreen(){
  const r=state.lastResult||{minutes:0,sets:0,reps:0,calories:0,stamp:'—',name:''};
  const total=planSets()||r.sets;
- return shell(`${topBar('Workout Complete')}<div class="screen"><div class="complete"><div class="trophy">🏆</div><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Workout complete</span><h1 style="font:800 22px Manrope;margin:10px 0 5px">Nice work — that's logged.</h1><p style="font-size:11px;opacity:.8;margin:0">${r.name} · ${r.stamp}</p></div><div class="completion-grid"><div class="completion-stat"><small>🔥 Calories</small><strong>${r.calories}</strong></div><div class="completion-stat"><small>⏱ Minutes</small><strong>${r.minutes}</strong></div><div class="completion-stat"><small>▣ Total Reps</small><strong>${r.reps}</strong></div><div class="completion-stat"><small>✓ Completed</small><strong style="color:#5c9d55">${total?Math.round(r.sets/total*100):0}%</strong></div></div><div class="section-head"><h2 class="h2">Streak</h2><span class="pill">🔥 ${streak()} days</span></div><div class="workout-card"><div class="progress-top"><span style="width:${total?Math.round(r.sets/total*100):0}%"></span></div><button class="primary" style="margin-top:13px" onclick="go('dashboard')">Back to Dashboard</button></div></div>`)}
+ return shell(`${topBar('Workout Complete')}<div class="screen"><div class="complete"><div class="trophy">🏆</div><span class="pill" style="background:rgba(255,255,255,.16);color:#fff">✓ Workout complete</span><h1 style="font:800 22px Manrope;margin:10px 0 5px">Nice work — that's logged.</h1><p style="font-size:11px;opacity:.8;margin:0">${r.name} · ${r.stamp}</p></div><div class="completion-grid"><div class="completion-stat"><small>🔥 Calories</small><strong>${r.calories}</strong></div><div class="completion-stat"><small>⏱ Minutes</small><strong>${r.minutes}</strong></div><div class="completion-stat"><small>▣ Volume</small><strong>${r.volume?fmtVolume(r.volume)+' kg':r.reps+' reps'}</strong></div><div class="completion-stat"><small>✓ Completed</small><strong style="color:#5c9d55">${total?Math.round(r.sets/total*100):0}%</strong></div></div><div class="section-head"><h2 class="h2">Streak</h2><span class="pill">🔥 ${streak()} days</span></div><div class="workout-card"><div class="progress-top"><span style="width:${total?Math.round(r.sets/total*100):0}%"></span></div><button class="primary" style="margin-top:13px" onclick="go('dashboard')">Back to Dashboard</button></div></div>`)}
 
 function progressScreen(){
  const mins=weeklyMinutes(),max=Math.max(1,...mins),pct=weeklyPct();
- return shell(`${topBar('Your Progress',false)}<div class="screen"><div class="section-head"><div><div class="eyebrow">This week</div><h1 class="h1">${state.history.length?'Keep it going':'Log your first session'}</h1></div><span class="pill">🔥 ${streak()} days</span></div><div class="workout-card"><div class="progress-ring" style="background:conic-gradient(var(--green) 0 ${pct}%,#e5eadb ${pct}% 100%)"><div><strong>${pct}%</strong><span>weekly goal</span></div></div><div class="stat-grid"><div class="stat"><span>Workouts</span><strong>${thisWeek().length}</strong><span>/ ${WEEKLY_TARGET} goal</span></div><div class="stat"><span>Minutes</span><strong>${mins.reduce((a,b)=>a+b,0)}</strong><span>this week</span></div><div class="stat"><span>Sets</span><strong>${totalSetsDone()}</strong><span>all time</span></div></div></div><div class="section-head"><h2 class="h2">Weekly activity</h2></div><div class="workout-card"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px;align-items:end;height:130px">${mins.map((v,i)=>`<div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;text-align:center"><div style="height:${Math.round(v/max*100)}%;min-height:4px;background:${v?'var(--green)':'#dfe5d4'};border-radius:8px 8px 4px 4px"></div><small style="font-size:9px;color:#999">${['M','T','W','T','F','S','S'][i]}</small></div>`).join('')}</div><p class="sub" style="margin:10px 0 0;text-align:center">Minutes trained per day</p></div></div>${bottomNav('progress')}`)}
+ return shell(`${topBar('Your Progress',false)}<div class="screen"><div class="section-head"><div><div class="eyebrow">This week</div><h1 class="h1">${state.history.length?'Keep it going':'Log your first session'}</h1></div><span class="pill">🔥 ${streak()} days</span></div><div class="workout-card"><div class="progress-ring" style="background:conic-gradient(var(--green) 0 ${pct}%,#e5eadb ${pct}% 100%)"><div><strong>${pct}%</strong><span>weekly goal</span></div></div><div class="stat-grid"><div class="stat"><span>Workouts</span><strong>${thisWeek().length}</strong><span>/ ${WEEKLY_TARGET} goal</span></div><div class="stat"><span>Minutes</span><strong>${mins.reduce((a,b)=>a+b,0)}</strong><span>this week</span></div><div class="stat"><span>Volume</span><strong>${fmtVolume(totalVolume())}</strong><span>kg lifted</span></div></div></div><div class="section-head"><h2 class="h2">Weekly activity</h2></div><div class="workout-card"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px;align-items:end;height:130px">${mins.map((v,i)=>`<div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;text-align:center"><div style="height:${Math.round(v/max*100)}%;min-height:4px;background:${v?'var(--green)':'#dfe5d4'};border-radius:8px 8px 4px 4px"></div><small style="font-size:9px;color:#999">${['M','T','W','T','F','S','S'][i]}</small></div>`).join('')}</div><p class="sub" style="margin:10px 0 0;text-align:center">Minutes trained per day</p></div></div>${bottomNav('progress')}`)}
 
 function historyScreen(){
  const h=state.history;
- return shell(`${topBar('Workout History',false)}<div class="screen">${h.length?`<div class="pill" style="margin-bottom:10px">${h.length} session${h.length===1?'':'s'} · ${totalMinutes()} minutes</div><div class="stack">${h.map(x=>`<div class="workout-card"><div class="workout-top"><div class="workout-art">${icons.check}</div><div class="workout-info"><h3>${x.name}</h3><p>${whenLabel(x.at)} · ${x.minutes} min · ${x.sets} sets</p></div><span class="pill">Done</span></div></div>`).join('')}</div>`:empty(icons.history,'No sessions yet','Finish a workout and it will show up here with your time and sets.','<button class="primary" onclick="go(\'dashboard\')">Go to dashboard</button>')}</div>${bottomNav('history')}`)}
+ return shell(`${topBar('Workout History',false)}<div class="screen">${h.length?`<div class="pill" style="margin-bottom:10px">${h.length} session${h.length===1?'':'s'} · ${totalMinutes()} minute${totalMinutes()===1?'':'s'}</div><div class="stack">${h.map(x=>`<div class="workout-card"><div class="workout-top"><div class="workout-art">${icons.check}</div><div class="workout-info"><h3>${x.name}</h3><p>${whenLabel(x.at)} · ${x.minutes} min · ${x.sets} sets${x.volume?' · '+fmtVolume(x.volume)+' kg':''}</p></div><span class="pill">Done</span></div></div>`).join('')}</div>`:empty(icons.history,'No sessions yet','Finish a workout and it will show up here with your time and sets.','<button class="primary" onclick="go(\'dashboard\')">Go to dashboard</button>')}</div>${bottomNav('history')}`)}
 
-function profileScreen(){return shell(`${topBar('Profile',false)}<div class="screen"><div class="workout-card" style="display:flex;gap:13px;align-items:center"><div class="option-icon" style="width:54px;height:54px;border-radius:17px">${icons.user}</div><div style="flex:1"><h2 class="h2">${state.anon?'Guest Athlete':'My Profile'}</h2><p class="sub" style="margin:3px 0">${state.history.length} workout${state.history.length===1?'':'s'} · ${totalMinutes()} minutes</p></div></div><div class="section-head"><h2 class="h2">Preferences</h2></div><div class="stack"><button class="option" onclick="go('target')">${iconCircle('◎')}<div class="option-copy"><div class="option-title">Fitness goal</div><div class="option-meta">${state.goal}</div></div>›</button><button class="option" onclick="go('equipment')">${iconCircle('◆')}<div class="option-copy"><div class="option-title">Equipment</div><div class="option-meta">${state.equipment.length} selected</div></div>›</button></div><div class="section-head"><h2 class="h2">Storage</h2></div><div class="option"><div class="option-icon" style="color:${Store.mode==='firebase'?'var(--green)':'#9aa08f'}">${icons.spark}</div><div class="option-copy"><div class="option-title">${Store.mode==='firebase'?'Synced to your account':'Saved on this device'}</div><div class="option-meta">${Store.status}</div></div></div><div class="section-head"><h2 class="h2">Account</h2></div><div class="stack"><button class="secondary" onclick="resetProgress()">Reset all data</button></div><p class="sub" style="margin-top:14px;text-align:center">Zaman Fitness</p></div>${bottomNav('profile')}`)}
+function profileScreen(){return shell(`${topBar('Profile',false)}<div class="screen"><div class="workout-card" style="display:flex;gap:13px;align-items:center"><div class="option-icon" style="width:54px;height:54px;border-radius:17px">${icons.user}</div><div style="flex:1"><h2 class="h2">${state.anon?'Guest Athlete':'My Profile'}</h2><p class="sub" style="margin:3px 0">${state.history.length} workout${state.history.length===1?'':'s'} · ${totalMinutes()} minute${totalMinutes()===1?'':'s'}</p></div></div><div class="section-head"><h2 class="h2">Preferences</h2></div><div class="stack"><button class="option" onclick="go('target')">${iconCircle('◎')}<div class="option-copy"><div class="option-title">Fitness goal</div><div class="option-meta">${state.goal}</div></div>›</button><button class="option" onclick="go('equipment')">${iconCircle('◆')}<div class="option-copy"><div class="option-title">Equipment</div><div class="option-meta">${state.equipment.length} selected</div></div>›</button></div><div class="section-head"><h2 class="h2">Storage</h2></div><div class="option"><div class="option-icon" style="color:${Store.mode==='firebase'?'var(--green)':'#9aa08f'}">${icons.spark}</div><div class="option-copy"><div class="option-title">${Store.mode==='firebase'?'Synced to your account':'Saved on this device'}</div><div class="option-meta">${Store.status}</div></div></div><div class="section-head"><h2 class="h2">Account</h2></div>${accountBlock()}<div class="stack" style="margin-top:12px"><button class="secondary" onclick="resetProgress()">Reset all data</button></div><p class="sub" style="margin-top:14px;text-align:center">Zaman Fitness</p></div>${bottomNav('profile')}`)}
+
+function accountBlock(){
+ if(typeof Auth==='undefined'||!Auth.available())
+  return `<div class="option">${iconCircle('◌')}<div class="option-copy"><div class="option-title">Accounts unavailable</div><div class="option-meta">Sign-in needs a connection to Firebase.</div></div></div>`;
+ if(!Auth.isAnonymous())
+  return `<div class="option">${iconCircle('✓')}<div class="option-copy"><div class="option-title">Signed in</div><div class="option-meta">${Auth.label()}</div></div></div><button class="secondary" style="margin-top:10px" onclick="doSignOut()">Sign out</button>`;
+ return `<div class="generate" style="text-align:left"><h3 style="margin-top:0">Save your progress</h3><p style="margin-bottom:12px">You are training as a guest. Create an account and your history follows you to any device — nothing you have already logged is lost.</p><button class="primary" onclick="signInGoogle()">Continue with Google</button><button class="secondary" style="margin-top:8px" onclick="go('account')">Use email instead</button></div>`;
+}
+
+function accountScreen(){
+ const mode=state.accountMode==='signin';
+ return shell(`${topBar(mode?'Sign in':'Create account')}<div class="screen"><p class="sub">${mode?'Sign in to load the history on your account.':'Your guest history moves across to the new account automatically.'}</p><div class="stack" style="margin-top:14px"><input class="form-input" id="acc-email" type="email" inputmode="email" autocomplete="email" placeholder="Email address"><input class="form-input" id="acc-pass" type="password" autocomplete="${mode?'current-password':'new-password'}" placeholder="Password (min 6 characters)"></div><div id="acc-error" class="sub" style="color:var(--danger);min-height:18px;margin-top:6px"></div><button class="primary" onclick="submitAccount()">${mode?'Sign in':'Create account'}</button><button class="secondary" style="margin-top:8px" onclick="toggleAccountMode()">${mode?'Need an account? Create one':'Already have an account? Sign in'}</button><div class="section-head"><h2 class="h2">Or</h2></div><button class="secondary" onclick="signInGoogle()">Continue with Google</button></div>`);
+}
+
+function toggleAccountMode(){state.accountMode=state.accountMode==='signin'?'create':'signin';render()}
+function accError(msg){const el=document.getElementById('acc-error');if(el)el.textContent=msg||''}
+
+async function signInGoogle(){
+ try{await Auth.upgradeWithGoogle();toast('Signed in');await afterAuthChange();go('profile')}
+ catch(err){const m=Auth.readable(err);accError(m);toast(m)}
+}
+
+async function submitAccount(){
+ const email=(document.getElementById('acc-email')||{}).value||'';
+ const pass=(document.getElementById('acc-pass')||{}).value||'';
+ if(!email.trim()||!pass){accError('Enter an email and a password.');return}
+ accError('');
+ try{
+  if(state.accountMode==='signin')await Auth.signInWithEmail(email.trim(),pass);
+  else await Auth.upgradeWithEmail(email.trim(),pass);
+  toast('Signed in');
+  await afterAuthChange();
+  go('profile');
+ }catch(err){accError(Auth.readable(err))}
+}
+
+async function doSignOut(){
+ try{await Auth.signOut();toast('Signed out');await afterAuthChange();go('profile')}
+ catch(err){toast(Auth.readable(err))}
+}
+
+// After a sign-in the uid may have changed, so pull whatever that account holds.
+async function afterAuthChange(){
+ const saved=await Store.load();
+ if(saved&&saved.v===STATE_VERSION)PERSISTED.forEach(k=>{if(saved[k]!==undefined)state[k]=saved[k]});
+ else if(!saved)await persist();   // new account: seed it with what we have
+ render();
+}
 
 function adminScreen(){const h=state.history;return `<div class="desktop-shell"><aside class="desktop-nav"><div class="brand"><div class="brand-mark">Z</div>Zaman Fitness</div><div class="nav-group"><div class="nav-label">Overview</div><button class="nav-btn active">${icons.chart} Dashboard</button></div><div class="nav-group"><div class="nav-label">System</div><button class="nav-btn" onclick="closeAdmin()">← Back to App</button></div></aside><main class="desktop-main"><div class="admin-title"><div><button class="chip admin-back" onclick="closeAdmin()">← Back to App</button><div class="eyebrow">Admin Console</div><h1>This account</h1><p class="sub">Real data for the signed-in user. Fleet-wide admin needs a backend query layer, which is not built yet.</p></div></div><div class="admin-grid"><div class="admin-card"><div class="eyebrow">Workouts</div><div class="num">${h.length}</div><span class="sub">all time</span></div><div class="admin-card"><div class="eyebrow">Minutes</div><div class="num">${totalMinutes()}</div><span class="sub">all time</span></div><div class="admin-card"><div class="eyebrow">Sets</div><div class="num">${totalSetsDone()}</div><span class="sub">all time</span></div><div class="admin-card"><div class="eyebrow">Streak</div><div class="num">${streak()}</div><span class="sub">days</span></div></div><div class="admin-table"><div style="padding:18px"><h2 class="h2">Exercise library</h2><p class="sub">${EXERCISES.length} exercises across ${EQUIPMENT.length} equipment types.</p></div><table><thead><tr><th>Exercise</th><th>Muscles</th><th>Pattern</th><th>Requires</th></tr></thead><tbody>${EXERCISES.map(e=>`<tr><td><b>${e.n}</b></td><td>${e.m}</td><td>${e.p}</td><td>${e.needs.length?e.needs.join(', '):'bodyweight'}</td></tr>`).join('')}</tbody></table></div><p class="admin-mobile-note sub">Tip: open this page on desktop for the full admin layout.</p></main></div>`}
 
-const screens={target:targetScreen,equipment:equipmentScreen,generating:generatingScreen,dashboard:dashboardScreen,detail:detailScreen,exercise:exerciseScreen,complete:completeScreen,progress:progressScreen,history:historyScreen,profile:profileScreen,admin:adminScreen};
+const screens={target:targetScreen,equipment:equipmentScreen,generating:generatingScreen,dashboard:dashboardScreen,detail:detailScreen,exercise:exerciseScreen,complete:completeScreen,progress:progressScreen,history:historyScreen,profile:profileScreen,account:accountScreen,admin:adminScreen};
 function render(){const view=screens[state.screen]||dashboardScreen;document.getElementById('app').innerHTML=view()}
 function go(s){if(s!=='exercise')stopRest();state.screen=s;render();window.scrollTo(0,0)}
-function goBack(){const map={equipment:'target',target:state.onboarded?'profile':'target',detail:'dashboard',exercise:'detail',complete:'dashboard',progress:'dashboard',history:'dashboard',profile:'dashboard'};go(map[state.screen]||'dashboard')}
+function goBack(){const map={equipment:'target',target:state.onboarded?'profile':'target',account:'profile',detail:'dashboard',exercise:'detail',complete:'dashboard',progress:'dashboard',history:'dashboard',profile:'dashboard'};go(map[state.screen]||'dashboard')}
 
 function setGoal(g){state.goal=g;persist();render()}
 function toggleEquip(e){state.equipment=state.equipment.includes(e)?state.equipment.filter(x=>x!==e):[...state.equipment,e];persist();render()}
@@ -160,15 +210,25 @@ function stopRest(){if(restTimer){clearInterval(restTimer);restTimer=null}}
 
 function startSession(){
  if(!plan())return;
- if(!state.session)state.session={exIndex:0,setIndex:0,setsDone:0,repsDone:0,phase:'ready',startedAt:Date.now(),restLeft:0,restTotal:0,nextLabel:''};
+ if(!state.session)state.session={exIndex:0,setIndex:0,setsDone:0,repsDone:0,volume:0,log:[],phase:'ready',startedAt:Date.now(),restLeft:0,restTotal:0,nextLabel:''};
  go('exercise');
 }
 function beginSet(){state.session.phase='work';render()}
+function bumpWeight(delta){
+ const f=document.getElementById('set-weight');
+ if(!f)return;
+ f.value=Math.max(0,Math.round(((parseFloat(f.value)||0)+delta)*2)/2);
+}
 
 function completeSet(){
  const s=state.session,w=plan(),ex=w.exercises[s.exIndex],reps=ex.reps[s.setIndex];
+ const field=document.getElementById('set-weight');
+ const kg=field?Math.max(0,parseFloat(field.value)||0):0;
  s.setsDone++;
  if(typeof reps==='number')s.repsDone+=reps;
+ if(typeof reps==='number'&&kg>0)s.volume+=reps*kg;
+ s.log.push({exercise:ex.name,set:s.setIndex+1,reps,kg});
+ state.lastWeights[ex.name]=kg;   // prefilled next time, so loads carry forward
  const lastSet=s.setIndex+1>=ex.reps.length,lastExercise=s.exIndex+1>=w.exercises.length;
  if(lastSet&&lastExercise){finishWorkout();return}
  s.nextLabel=lastSet?w.exercises[s.exIndex+1].name:`Set ${s.setIndex+2} of ${ex.reps.length}`;
@@ -201,9 +261,9 @@ function finishWorkout(){
  const s=state.session,w=plan();
  stopRest();
  const minutes=Math.max(1,Math.round((Date.now()-s.startedAt)/60000));
- state.lastResult={name:w.name,minutes,sets:s.setsDone,reps:s.repsDone,calories:Math.round(minutes*7.5),
+ state.lastResult={name:w.name,minutes,sets:s.setsDone,reps:s.repsDone,volume:Math.round(s.volume),calories:Math.round(minutes*7.5),
   stamp:new Date().toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})};
- state.history.unshift({name:w.name,at:new Date().toISOString(),minutes,sets:s.setsDone,reps:s.repsDone,goal:w.goal});
+ state.history.unshift({name:w.name,at:new Date().toISOString(),minutes,sets:s.setsDone,reps:s.repsDone,volume:Math.round(s.volume),goal:w.goal,log:s.log});
  state.session=null;
  persist();
  go('complete');

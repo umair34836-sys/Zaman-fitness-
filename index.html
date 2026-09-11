@@ -9,7 +9,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Zaman" />
+  <link rel="stylesheet" href="styles.css?v=5" />
   <script>
     // Runs before any other script, so it also catches parse errors in the
     // files below. Without this a failure anywhere in app.js leaves nothing but
@@ -63,9 +69,21 @@
       Zaman Fitness needs JavaScript enabled.
     </p>
   </noscript>
-  <script src="firebase-config.js?v=4"></script>
-  <script src="workouts.js?v=4"></script>
-  <script src="store.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="firebase-config.js?v=5"></script>
+  <script src="workouts.js?v=5"></script>
+  <script src="auth.js?v=5"></script>
+  <script src="store.js?v=5"></script>
+  <script src="app.js?v=5"></script>
+  <script>
+    // Offline support. Registered after load so it never delays first paint,
+    // and failure here must not affect the app.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (err) {
+          console.warn('[Zaman Fitness] Service worker not registered:', err && err.message);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
