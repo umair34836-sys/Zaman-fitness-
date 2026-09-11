@@ -5,7 +5,7 @@
 // localStorage when the network is gone, and a stale auth or Firestore response
 // would be worse than no response.
 
-const VERSION = 'zf-v6';
+const VERSION = 'zf-v7';
 const SHELL = [
   './',
   'index.html',

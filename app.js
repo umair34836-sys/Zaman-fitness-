@@ -140,10 +140,10 @@ function landingScreen() {
       <h1>Workouts that fit your goal, your kit and your time.</h1>
       <p>Zaman Fitness builds each session around what you want to achieve and the equipment you actually own, then walks you through it set by set — with a tutorial video on every exercise and your lifted weight tracked as you go.</p>
       <div class="hero-cta">
-        <button class="btn btn-primary" onclick="openAuth('register')">Create free account</button>
-        <button class="btn btn-secondary" onclick="startGuest()">Continue as guest</button>
+        <button class="btn btn-primary" onclick="go('start')">Get started</button>
+        <button class="btn btn-secondary" onclick="openAuth('signin')">I already have an account</button>
       </div>
-      <p class="tiny" style="margin-top:12px">Guest mode stores your training on this device only. No account needed to try it.</p>
+      <p class="tiny" style="margin-top:12px">Free, and you can try the whole app without signing up.</p>
 
       <div class="hero-art">
         <div class="hero-stats">
@@ -172,10 +172,9 @@ function landingScreen() {
 
     <h2>Ready to start?</h2>
     <div class="card" style="text-align:center">
-      <p class="sub" style="margin-bottom:14px">Create an account to keep your training on every device, or try it first as a guest.</p>
+      <p class="sub" style="margin-bottom:14px">It takes about a minute: choose a goal, tick your equipment, and your first session is ready.</p>
       <div class="hero-cta" style="justify-content:center">
-        <button class="btn btn-primary" onclick="openAuth('register')">Create free account</button>
-        <button class="btn btn-secondary" onclick="startGuest()">Continue as guest</button>
+        <button class="btn btn-primary" onclick="go('start')">Get started</button>
       </div>
     </div>
 
@@ -186,12 +185,47 @@ function landingScreen() {
   </div>`;
 }
 
-/* ---- 2. accounts ---- */
+/* ---- 2. how do you want to start? ---- */
+
+function startScreen() {
+  const offline = !Backend.online;
+  return phone(`${bar('Get started', "go('landing')")}
+    <div class="screen no-nav">
+      <h1 class="h1" style="margin-top:6px">How would you like to start?</h1>
+      <p class="sub">Either way you get the whole app — the only difference is where your training is saved.</p>
+
+      <div class="stack" style="margin-top:18px">
+        <div class="card ${offline ? '' : 'card-pick'}">
+          <div class="wk-top">
+            <span class="wk-art">${ICON.user}</span>
+            <span class="wk-info"><h3>Create a free account</h3><p>Recommended</p></span>
+          </div>
+          <p class="sub" style="margin:11px 0 0">Your workouts, history and progress are saved to your account, so they follow you to any phone, tablet or computer you sign in on.</p>
+          <button class="btn btn-primary" style="margin-top:12px" ${offline ? 'disabled' : ''} onclick="openAuth('register')">Create account</button>
+          ${offline ? `<p class="hint">Accounts need a connection. ${esc(Backend.reason)}.</p>` : ''}
+        </div>
+
+        <div class="card">
+          <div class="wk-top">
+            <span class="wk-art" style="background:#f0f2ea;color:#8b9184">${ICON.offline}</span>
+            <span class="wk-info"><h3>Continue as a guest</h3><p>No sign-up</p></span>
+          </div>
+          <p class="sub" style="margin:11px 0 0">Start straight away. Everything is kept on this device only — clearing your browser or changing phone loses it. You can create an account later and it all moves across.</p>
+          <button class="btn btn-secondary" style="margin-top:12px" onclick="startGuest()">Continue as guest</button>
+        </div>
+      </div>
+
+      <div class="section-head"><span class="sub">Already have an account?</span></div>
+      <button class="btn btn-secondary" ${offline ? 'disabled' : ''} onclick="openAuth('signin')">Sign in</button>
+    </div>`);
+}
+
+/* ---- 3. accounts ---- */
 
 function authScreen() {
   const reg = S.authMode === 'register';
   const offline = !Backend.online;
-  return phone(`${bar(reg ? 'Create account' : 'Sign in', "go('landing')")}
+  return phone(`${bar(reg ? 'Create account' : 'Sign in', "go('start')")}
     <div class="screen no-nav">
       ${offline ? `<div class="card" style="margin-bottom:14px"><b>Accounts are unavailable</b><p class="sub" style="margin-top:6px">${esc(Backend.reason)}. You can still use the app as a guest on this device.</p><button class="btn btn-secondary" style="margin-top:12px" onclick="startGuest()">Continue as guest</button></div>` : ''}
       <p class="sub">${reg ? 'One account keeps your workouts and progress on every device you sign into.' : 'Welcome back. Sign in to pick up where you left off.'}</p>
@@ -537,7 +571,7 @@ function profileScreen() {
 /* ---- router ---- */
 
 const SCREENS = {
-  landing: landingScreen, auth: authScreen, goal: goalScreen, equipment: equipmentScreen,
+  landing: landingScreen, start: startScreen, auth: authScreen, goal: goalScreen, equipment: equipmentScreen,
   dashboard: dashboardScreen, building: buildingScreen, browse: browseScreen, detail: detailScreen,
   session: sessionScreen, done: doneScreen, progress: progressScreen, history: historyScreen,
   profile: profileScreen, admin: () => AdminPanel.render()
@@ -789,8 +823,10 @@ async function boot() {
   // the visitor page. No account is ever created silently.
   if (Store.savedMode() === 'guest' && Store.hasLocal()) {
     Store.useGuest();
-    go(u().onboarded ? 'dashboard' : 'goal');
-    return;
+    // Only somebody who actually finished setting up counts as a returning
+    // user. Anyone else is still a visitor and belongs on the landing page --
+    // being dropped straight onto "What is your target?" is jarring.
+    if (u().onboarded) { go('dashboard'); return; }
   }
   go('landing');
 }

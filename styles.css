@@ -301,3 +301,4 @@ td .btn{width:auto;padding:7px 11px;font-size:12px}
 @keyframes load{to{width:95%}}
 
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+.card-pick{border-color:#9cbd58;box-shadow:0 0 0 2px rgba(109,149,29,.12),var(--shadow)}
