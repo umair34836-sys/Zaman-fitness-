@@ -25,6 +25,7 @@ const S = {
   session: null,
   lastResult: null,
   authMode: 'register',
+  returnTo: 'dashboard',   // where the goal/equipment flow goes back to
   error: '',
   busy: false
 };
@@ -248,10 +249,10 @@ function authScreen() {
 
 function goalScreen() {
   const cur = u().goal;
-  return phone(`${bar('Your goal', u().onboarded ? "go('profile')" : '')}
+  return phone(`${bar('Your goal', "go('" + (S.returnTo || 'dashboard') + "')")}
     <div class="screen no-nav">
       <div class="progress-bar"><span style="width:50%"></span></div>
-      <div style="margin-top:24px"><div class="eyebrow">Step 1 of 2</div><h1 class="h1">What is your target?</h1><p class="sub">This sets how many reps and how much rest each session gives you.</p></div>
+      <div style="margin-top:24px"><div class="eyebrow">Step 1 of 2</div><h1 class="h1">What is your target?</h1><p class="sub">This sets how many reps and how much rest each session gives you. You can change it any time.</p></div>
       <div class="stack" style="margin-top:20px">
         ${GOALS.map(g => `<button class="option ${cur === g.id ? 'on' : ''}" onclick="pickGoal('${g.id}')"><span class="option-icon">${g.mark}</span><span class="option-copy"><span class="option-title">${esc(g.name)}</span><span class="option-meta">${esc(g.blurb)}</span></span><span class="check">${cur === g.id ? ICON.check : ''}</span></button>`).join('')}
       </div>
@@ -278,7 +279,7 @@ function equipmentScreen() {
           return `<button class="option ${on ? 'on' : ''}" onclick="toggleEquip('${attr(e.name)}')"><span class="option-icon">${ICON.dumbbell}</span><span class="option-copy"><span class="option-title">${esc(e.name)}</span><span class="option-meta">${count(e.tag)} exercises</span></span><span class="check">${on ? ICON.check : ''}</span></button>`;
         }).join('')}
       </div>
-      <button class="btn btn-primary" style="margin-top:20px" ${none ? 'disabled' : ''} onclick="finishOnboarding()">${none ? 'Pick at least one' : 'Start training'}</button>
+      <button class="btn btn-primary" style="margin-top:20px" ${none ? 'disabled' : ''} onclick="finishOnboarding()">${none ? 'Pick at least one' : 'Save'}</button>
     </div>`);
 }
 
@@ -304,6 +305,15 @@ function dashboardScreen() {
         <div class="stat"><span>Workouts</span><b>${thisMonth().length}</b><span>this month</span></div>
         <div class="stat"><span>Minutes</span><b>${totalMinutes()}</b><span>total</span></div>
       </div>
+
+      ${!u().onboarded ? `<div class="card" style="margin-top:12px;border-color:#cfe0a8;background:#f6faee">
+        <div class="wk-top">
+          <span class="wk-art">◎</span>
+          <span class="wk-info"><h3>Set your goal and equipment</h3><p>Takes about a minute</p></span>
+        </div>
+        <p class="sub" style="margin:11px 0 0">Right now we assume ${esc(goalName(u().goal).toLowerCase())} with bodyweight only. Tell us what you are training for and what you own, and every session is built to match.</p>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="openSetup('dashboard')">Set my goal</button>
+      </div>` : ''}
 
       <div class="section-head"><h2 class="h2">${w ? 'Your next workout' : 'Get a workout'}</h2>${w ? `<a onclick="buildWorkout()">Rebuild</a>` : ''}</div>
       ${w ? workoutCard(w, true) : emptyBox(ICON.spark, 'No workout selected', 'Build one around your goal and equipment, or pick a ready-made plan.', `<button class="btn btn-primary" onclick="buildWorkout()">Build my workout</button>`)}
@@ -352,7 +362,7 @@ function browseScreen() {
   return phone(`${bar('Workouts', '')}
     <div class="screen">
       <div class="card">
-        <div class="wk-top"><span class="wk-art">${ICON.spark}</span><span class="wk-info"><h3>Build one for me</h3><p>From your goal and equipment</p></span></div>
+        <div class="wk-top"><span class="wk-art">${ICON.spark}</span><span class="wk-info"><h3>Build one for me</h3><p>${esc(goalName(u().goal))} · ${(u().equipment || []).length} equipment</p></span></div>
         <button class="btn btn-primary" style="margin-top:12px" onclick="buildWorkout()">Build my workout</button>
       </div>
       ${mine.length ? `<div class="section-head"><h2 class="h2">For ${esc(goalName(u().goal).toLowerCase())}</h2></div><div class="stack">${mine.map(card).join('')}</div>` : ''}
@@ -547,8 +557,8 @@ function profileScreen() {
 
       <div class="section-head"><h2 class="h2">Training</h2></div>
       <div class="stack">
-        <button class="option" onclick="go('goal')"><span class="option-icon">◎</span><span class="option-copy"><span class="option-title">Goal</span><span class="option-meta">${esc(goalName(u().goal))}</span></span><span style="color:#9ca394">›</span></button>
-        <button class="option" onclick="go('equipment')"><span class="option-icon">${ICON.dumbbell}</span><span class="option-copy"><span class="option-title">Equipment</span><span class="option-meta">${(u().equipment || []).length} selected</span></span><span style="color:#9ca394">›</span></button>
+        <button class="option" onclick="openSetup('profile')"><span class="option-icon">◎</span><span class="option-copy"><span class="option-title">Goal</span><span class="option-meta">${esc(goalName(u().goal))}</span></span><span style="color:#9ca394">›</span></button>
+        <button class="option" onclick="S.returnTo='profile';go('equipment')"><span class="option-icon">${ICON.dumbbell}</span><span class="option-copy"><span class="option-title">Equipment</span><span class="option-meta">${(u().equipment || []).length} selected</span></span><span style="color:#9ca394">›</span></button>
         <button class="option" onclick="go('history')"><span class="option-icon">${ICON.clock}</span><span class="option-copy"><span class="option-title">History</span><span class="option-meta">${history().length} session${history().length === 1 ? '' : 's'}</span></span><span style="color:#9ca394">›</span></button>
       </div>
 
@@ -598,7 +608,7 @@ function openAuth(mode) { S.authMode = mode; S.error = ''; go('auth'); }
 
 function startGuest() {
   Store.useGuest();
-  go(u().onboarded ? 'dashboard' : 'goal');
+  go('dashboard');
 }
 
 async function submitAuth() {
@@ -644,7 +654,7 @@ async function forgotPassword() {
 
 async function afterSignIn() {
   await loadCatalogue();
-  go(u().onboarded ? 'dashboard' : 'goal');
+  go('dashboard');
 }
 
 function showError(msg) {
@@ -681,9 +691,13 @@ async function toggleEquip(name) {
 async function quickEquip() { await Store.set({ equipment: ['Bodyweight & No Equipment'] }); render(); }
 async function clearEquip() { await Store.set({ equipment: [] }); render(); }
 
+// Opened from the dashboard or from Profile, and returns wherever it came from.
+function openSetup(from) { S.returnTo = from || 'dashboard'; go('goal'); }
+
 async function finishOnboarding() {
   await Store.set({ onboarded: true });
-  buildWorkout();
+  toast('Training preferences saved');
+  go(S.returnTo || 'dashboard');
 }
 
 /* ---- workouts ---- */
@@ -815,18 +829,18 @@ async function boot() {
   if (signedIn) {
     await Store.useAccount();
     if (wantsAdmin && Backend.isAdmin) { AdminPanel.open(); return; }
-    go(u().onboarded ? 'dashboard' : 'goal');
+    go('dashboard');
     return;
   }
 
   // Not signed in. Returning guests go straight back in; everyone else sees
   // the visitor page. No account is ever created silently.
+  // A returning guest goes back into the app; a first-time visitor sees the
+  // landing page. Setting a goal is never forced on either.
   if (Store.savedMode() === 'guest' && Store.hasLocal()) {
     Store.useGuest();
-    // Only somebody who actually finished setting up counts as a returning
-    // user. Anyone else is still a visitor and belongs on the landing page --
-    // being dropped straight onto "What is your target?" is jarring.
-    if (u().onboarded) { go('dashboard'); return; }
+    go('dashboard');
+    return;
   }
   go('landing');
 }
