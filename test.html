@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zaman Fitness — Diagnostics</title>
+<style>
+  body{margin:0;padding:16px;font:14px/1.5 system-ui,sans-serif;background:#fff;color:#1d2119}
+  h1{font-size:18px;margin:0 0 4px}
+  .ok{color:#2e7d32;font-weight:700}
+  .bad{color:#c0392b;font-weight:700}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #e6e8df}
+  .row span:last-child{font-family:ui-monospace,Menlo,monospace;text-align:right;word-break:break-all}
+  .panel{border:2px solid #709a1e;border-radius:12px;padding:12px;margin:14px 0;background:#f4f8ec}
+  code{background:#f0f2ea;padding:2px 5px;border-radius:5px;word-break:break-all}
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <h1>✅ Static HTML is working</h1>
+  <div>If you can read this, GitHub Pages is serving files correctly and the
+  URL is right. No JavaScript was needed to show this box.</div>
+</div>
+
+<h1>Checks</h1>
+<div id="out">Running…</div>
+
+<p style="margin-top:18px">Screenshot this whole page and send it.</p>
+
+<!-- app.js renders into #app; keep one here so loading it below is harmless. -->
+<div id="app" style="display:none"></div>
+
+<script>
+(function () {
+  var out = document.getElementById('out');
+  var rows = [];
+  function add(label, value, state) {
+    rows.push('<div class="row"><span>' + label + '</span><span class="' +
+      (state || '') + '">' + value + '</span></div>');
+    out.innerHTML = rows.join('');
+  }
+
+  add('JavaScript', 'running', 'ok');
+  add('Full URL', location.href);
+  add('Browser', navigator.userAgent.slice(0, 70));
+
+  // Feature checks the app depends on.
+  var feats = {
+    'Template literals': function () { return eval('`x`') === 'x'; },
+    'Arrow functions': function () { return eval('(()=>1)()') === 1; },
+    'Optional chaining': function () { return eval('({a:1})?.a') === 1; },
+    'async/await': function () { return eval('(async()=>1)') instanceof Function; },
+    'Dynamic import()': function () { return typeof eval('(x)=>import(x)') === 'function'; },
+    'localStorage': function () { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return true; }
+  };
+  for (var k in feats) {
+    try { add(k, feats[k]() ? 'supported' : 'MISSING', feats[k]() ? 'ok' : 'bad'); }
+    catch (e) { add(k, 'MISSING', 'bad'); }
+  }
+
+  // Can the app's own files actually be fetched from this origin?
+  ['index.html', 'app.js', 'store.js', 'firebase-config.js', 'styles.css'].forEach(function (f) {
+    fetch(f + '?cb=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { add('fetch ' + f, r.status + (r.ok ? ' OK' : ' FAIL'), r.ok ? 'ok' : 'bad'); })
+      .catch(function (e) { add('fetch ' + f, 'ERROR ' + e.message, 'bad'); });
+  });
+
+  // Actually execute app.js here and report whether it parses and defines its API.
+  var s = document.createElement('script');
+  s.src = 'app.js?cb=' + Date.now();
+  s.onload = function () {
+    add('app.js parsed', typeof go === 'function' ? 'yes — go() defined' : 'loaded but go() missing',
+        typeof go === 'function' ? 'ok' : 'bad');
+  };
+  s.onerror = function () { add('app.js parsed', 'FAILED TO LOAD', 'bad'); };
+  window.addEventListener('error', function (e) {
+    if (e.filename && e.filename.indexOf('app.js') > -1) {
+      add('app.js error', e.message + ' (line ' + e.lineno + ')', 'bad');
+    }
+  });
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>
