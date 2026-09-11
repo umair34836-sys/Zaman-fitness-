@@ -584,7 +584,7 @@ const SCREENS = {
   landing: landingScreen, start: startScreen, auth: authScreen, goal: goalScreen, equipment: equipmentScreen,
   dashboard: dashboardScreen, building: buildingScreen, browse: browseScreen, detail: detailScreen,
   session: sessionScreen, done: doneScreen, progress: progressScreen, history: historyScreen,
-  profile: profileScreen, admin: () => AdminPanel.render()
+  profile: profileScreen, signingIn: signingInScreen, admin: () => AdminPanel.render()
 };
 
 function render() {
@@ -622,7 +622,7 @@ async function submitAuth() {
       await Backend.register(email, pass, name);
       await Store.useAccount();
       if (hadLocal) { const moved = await Store.adoptLocalInto(); if (moved) toast('Your guest training moved across'); }
-      if (name) await Store.set({ name });
+      if (name) Store.set({ name });
     } else {
       await Backend.signIn(email, pass);
       await Store.useAccount();
@@ -640,7 +640,7 @@ async function googleAuth() {
     await Backend.signInGoogle();
     await Store.useAccount();
     if (hadLocal) { const moved = await Store.adoptLocalInto(); if (moved) toast('Your guest training moved across'); }
-    if (!u().name && Backend.user.displayName) await Store.set({ name: Backend.user.displayName });
+    if (!u().name && Backend.user.displayName) Store.set({ name: Backend.user.displayName });
     await afterSignIn();
   } catch (err) { showError(Backend.readable(err)); }
 }
@@ -652,9 +652,9 @@ async function forgotPassword() {
   catch (err) { showError(Backend.readable(err)); }
 }
 
-async function afterSignIn() {
-  await loadCatalogue();
+function afterSignIn() {
   go('dashboard');
+  loadCatalogue();
 }
 
 function showError(msg) {
@@ -665,6 +665,7 @@ function showError(msg) {
 
 async function doSignOut() {
   stopRest();
+  await Store.flush();
   await Backend.signOut();
   Store.leave();
   S.workout = null; S.session = null;
@@ -682,20 +683,20 @@ async function confirmWipe() {
 
 /* ---- onboarding actions ---- */
 
-async function pickGoal(id) { await Store.set({ goal: id }); render(); }
-async function toggleEquip(name) {
+function pickGoal(id) { Store.set({ goal: id }); render(); }
+function toggleEquip(name) {
   const have = u().equipment || [];
-  await Store.set({ equipment: have.includes(name) ? have.filter(x => x !== name) : have.concat(name) });
+  Store.set({ equipment: have.includes(name) ? have.filter(x => x !== name) : have.concat(name) });
   render();
 }
-async function quickEquip() { await Store.set({ equipment: ['Bodyweight & No Equipment'] }); render(); }
-async function clearEquip() { await Store.set({ equipment: [] }); render(); }
+function quickEquip() { Store.set({ equipment: ['Bodyweight & No Equipment'] }); render(); }
+function clearEquip() { Store.set({ equipment: [] }); render(); }
 
 // Opened from the dashboard or from Profile, and returns wherever it came from.
 function openSetup(from) { S.returnTo = from || 'dashboard'; go('goal'); }
 
-async function finishOnboarding() {
-  await Store.set({ onboarded: true });
+function finishOnboarding() {
+  Store.set({ onboarded: true });
   toast('Training preferences saved');
   go(S.returnTo || 'dashboard');
 }
@@ -704,17 +705,19 @@ async function finishOnboarding() {
 
 async function loadCatalogue() {
   const [ex, wk] = await Promise.all([Backend.loadExercises(), Backend.loadWorkouts()]);
+  const before = S.exercises.length + S.workouts.length;
   S.exercises = (ex && ex.length) ? ex : DEFAULT_EXERCISES.slice();
   S.workouts = (wk && wk.length) ? wk : DEFAULT_WORKOUTS.slice();
+  // Only repaint if the catalogue changed and the current screen shows it.
+  if (before !== S.exercises.length + S.workouts.length &&
+      ['dashboard', 'browse', 'detail', 'admin'].includes(S.screen)) render();
 }
 
 function buildWorkout() {
-  go('building');
-  setTimeout(() => {
-    S.workout = generateWorkout(u().goal, u().equipment, S.exercises);
-    S.session = null;
-    go('detail');
-  }, 700);
+  // Generating takes under a millisecond, so there is nothing to wait for.
+  S.workout = generateWorkout(u().goal, u().equipment, S.exercises);
+  S.session = null;
+  go('detail');
 }
 
 function openWorkout(id) {
@@ -750,7 +753,7 @@ function bumpWeight(delta) {
   f.value = Math.max(0, Math.round(((parseFloat(f.value) || 0) + delta) * 2) / 2);
 }
 
-async function completeSet() {
+function completeSet() {
   const s = S.session, w = S.workout;
   const item = w.items[s.exIndex];
   const ex = exerciseById(item.exerciseId);
@@ -763,7 +766,7 @@ async function completeSet() {
   if (typeof reps === 'number' && kg > 0) s.volume += reps * kg;
   s.log.push({ exerciseId: ex.id, set: s.setIndex + 1, reps, kg });
 
-  if (kg > 0) { const lw = Object.assign({}, u().lastWeights); lw[ex.id] = kg; await Store.set({ lastWeights: lw }); }
+  if (kg > 0) { const lw = Object.assign({}, u().lastWeights); lw[ex.id] = kg; Store.set({ lastWeights: lw }); }
 
   const lastSet = s.setIndex + 1 >= item.reps.length;
   const lastExercise = s.exIndex + 1 >= w.items.length;
@@ -804,9 +807,10 @@ async function finishWorkout() {
   };
   const entry = { name: w.name, at: new Date().toISOString(), minutes, sets: s.setsDone,
                   reps: s.repsDone, volume: Math.round(s.volume), goal: w.goal, log: s.log };
-  await Store.set({ history: [entry].concat(history()) });
+  Store.set({ history: [entry].concat(history()) });
   S.session = null;
   go('done');
+  Store.flush();          // a finished workout is worth writing out straight away
 }
 
 /* ---- admin entry ---- */
@@ -819,30 +823,38 @@ function openAdmin() {
 
 /* ---- boot ---- */
 
+function signingInScreen() {
+  return `<div class="loading"><div class="spinner"></div><p class="sub">Signing you in…</p></div>`;
+}
+
 async function boot() {
+  // Paint before touching the network. The bundled catalogue can draw every
+  // screen, so a visitor or a returning guest sees the app immediately and
+  // Firebase loads behind them. Previously nothing appeared until the SDK and
+  // two Firestore reads had finished, which is what made loading feel slow.
+  S.exercises = DEFAULT_EXERCISES.slice();
+  S.workouts = DEFAULT_WORKOUTS.slice();
+
+  const remembered = Store.savedMode();
+  const guestReady = remembered === 'guest' && Store.hasLocal();
+
+  if (guestReady) { Store.useGuest(); go('dashboard'); }
+  else if (remembered === 'account') { S.screen = 'signingIn'; render(); }
+  else go('landing');
+
+  /* --- everything below happens after that first paint --- */
   await Backend.init();
-  await loadCatalogue();
 
-  const wantsAdmin = location.hash === '#admin';
-  const signedIn = Boolean(Backend.user);
-
-  if (signedIn) {
+  if (Backend.user) {
     await Store.useAccount();
-    if (wantsAdmin && Backend.isAdmin) { AdminPanel.open(); return; }
+    if (location.hash === '#admin' && Backend.isAdmin) { AdminPanel.open(); loadCatalogue(); return; }
     go('dashboard');
-    return;
+  } else if (!guestReady) {
+    // Either a first-time visitor, or a remembered account whose session ended.
+    go('landing');
   }
 
-  // Not signed in. Returning guests go straight back in; everyone else sees
-  // the visitor page. No account is ever created silently.
-  // A returning guest goes back into the app; a first-time visitor sees the
-  // landing page. Setting a goal is never forced on either.
-  if (Store.savedMode() === 'guest' && Store.hasLocal()) {
-    Store.useGuest();
-    go('dashboard');
-    return;
-  }
-  go('landing');
+  loadCatalogue();   // not awaited: the bundled catalogue is already on screen
 }
 
 Backend.onAuth(async (user) => {

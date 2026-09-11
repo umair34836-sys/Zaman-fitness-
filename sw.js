@@ -5,7 +5,7 @@
 // localStorage when the network is gone, and a stale auth or Firestore response
 // would be worse than no response.
 
-const VERSION = 'zf-v7';
+const VERSION = 'zf-v8';
 const SHELL = [
   './',
   'index.html',
@@ -53,7 +53,37 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(req.url);
 
-  // Anything cross-origin (Firebase, Google Fonts) goes straight to the network.
+  // The Firebase SDK is served from versioned, immutable URLs, so cache it.
+  // Re-downloading ~100KB of JS on every visit is the single slowest part of
+  // starting up on mobile data.
+  if (url.hostname === 'www.gstatic.com' && url.pathname.includes('/firebasejs/')) {
+    event.respondWith(
+      caches.match(req).then(hit => hit || fetch(req).then(res => {
+        if (res && (res.ok || res.type === 'opaque')) {
+          const copy = res.clone();
+          caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {});
+        }
+        return res;
+      }))
+    );
+    return;
+  }
+
+  // Fonts: serve what we have and refresh behind it.
+  if (url.hostname === 'fonts.gstatic.com' || url.hostname === 'fonts.googleapis.com') {
+    event.respondWith(
+      caches.match(req).then(hit => hit || fetch(req).then(res => {
+        if (res && (res.ok || res.type === 'opaque')) {
+          const copy = res.clone();
+          caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {});
+        }
+        return res;
+      }).catch(() => hit))
+    );
+    return;
+  }
+
+  // Anything else cross-origin goes straight to the network.
   if (!isAppAsset(url)) return;
 
   // Navigations: try the network so a deploy is picked up promptly, fall back to

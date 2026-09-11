@@ -65,7 +65,29 @@ const Store = (function () {
   /* ---- reading and writing ---- */
 
   function get() { return data; }
-  function set(patch) { Object.assign(data, patch); return save(); }
+
+  // Writes are optimistic: the in-memory copy updates at once so the UI can
+  // repaint immediately, and the (possibly slow, possibly networked) write is
+  // coalesced and done afterwards. Awaiting a Firestore round-trip before
+  // repainting made every tap feel broken.
+  let saveTimer = null, dirty = false;
+
+  function set(patch) {
+    Object.assign(data, patch);
+    dirty = true;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveTimer = null; flush(); }, 400);
+    return data;
+  }
+
+  // Force any pending write out now. Use before signing out, or after
+  // something the user would be upset to lose.
+  async function flush() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    if (!dirty) return true;
+    dirty = false;
+    return save();
+  }
 
   async function save() {
     data.v = VERSION;
@@ -98,7 +120,7 @@ const Store = (function () {
   }
 
   return {
-    useAccount, useGuest, leave, get, set, save, adoptLocalInto, wipe,
+    useAccount, useGuest, leave, get, set, save, flush, adoptLocalInto, wipe,
     localClear, savedMode, hasLocal: () => Boolean(localRead()),
     get mode() { return mode; }
   };
