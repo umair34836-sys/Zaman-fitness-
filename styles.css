@@ -101,8 +101,8 @@ textarea.input{min-height:78px;resize:vertical}
 .option-icon svg{width:19px;height:19px}
 .option.on .option-icon{background:var(--green);color:#fff}
 .option-copy{flex:1;min-width:0}
-.option-title{font-weight:700;font-size:14px}
-.option-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.option-title{display:block;font-weight:700;font-size:14px}
+.option-meta{display:block;font-size:11px;color:var(--muted);margin-top:2px}
 .check{width:20px;height:20px;border:1.5px solid #ccd2c4;border-radius:50%;display:grid;place-items:center;
   color:#fff;flex:none}
 .check svg{width:13px;height:13px}
@@ -204,7 +204,7 @@ textarea.input{min-height:78px;resize:vertical}
 .ex-copy small{display:block;color:var(--muted);font-size:10px;margin-top:2px}
 .ex-row.done .ex-copy b{color:#9ba192;text-decoration:line-through}
 
-.illus{height:158px;border-radius:18px;background:var(--green-soft);display:grid;place-items:center;margin-bottom:13px}
+.illus{position:relative;overflow:hidden;height:236px;border-radius:18px;background:var(--green-soft);display:grid;place-items:center;margin-bottom:13px}
 .illus svg{width:150px;height:128px}
 .progress-bar{height:5px;background:#dfe4d5;border-radius:999px;overflow:hidden}
 .progress-bar span{display:block;height:100%;background:var(--green);border-radius:999px;transition:width .3s}
@@ -326,3 +326,8 @@ td .btn{width:auto;padding:7px 11px;font-size:12px}
 /* The landing page is long; let the browser skip laying out what is off
    screen until it is scrolled to. */
 .feature-grid,.steps,.faq{content-visibility:auto;contain-intrinsic-size:auto 400px}
+
+/* 3D exercise demonstrator */
+.illus canvas{display:block;width:100%;height:100%}
+.model-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-6px 0 12px}
+.model-bar .tiny{opacity:.75}

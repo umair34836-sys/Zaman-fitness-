@@ -5,7 +5,7 @@
 // localStorage when the network is gone, and a stale auth or Firestore response
 // would be worse than no response.
 
-const VERSION = 'zf-v8';
+const VERSION = 'zf-v9';
 const SHELL = [
   './',
   'index.html',
@@ -14,6 +14,7 @@ const SHELL = [
   'backend.js',
   'store.js',
   'admin.js',
+  'viewer3d.js',
   'app.js',
   'firebase-config.js',
   'manifest.webmanifest',

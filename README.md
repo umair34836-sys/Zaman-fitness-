@@ -32,9 +32,10 @@ the local record into the new account before clearing it.
 
 Open at `#admin`, or from Profile → Admin when your account has access.
 
-- **Exercises** — add, edit and delete; each carries its own **tutorial video
-  link**, used everywhere that exercise appears. Left blank, the app links to a
-  YouTube search for the exercise instead of a dead link.
+- **Exercises** — add, edit and delete. Each carries its own **tutorial video
+  link**, used everywhere that exercise appears; left blank, the app links to a
+  YouTube search for it rather than a dead link. Each also has a **3D movement**,
+  which can be left on Automatic or pinned to a specific one.
 - **Workouts** — create new plans and edit the built-in ones. Pick the goal,
   write a description, add exercises, set the reps and rest per exercise,
   reorder them, and publish or hide the plan.
@@ -77,6 +78,31 @@ anything in it. To make that library editable, open the admin panel and press
 workouts as documents and never overwrites an existing one, so it is safe to
 run again.
 
+## 3D exercise demonstrator
+
+Every exercise screen shows an articulated 3D figure performing the movement on
+a loop, which the user can drag to look at from any angle and pause. It is
+built in `viewer3d.js`: a mannequin assembled from primitives, with each
+movement authored as a function that sets joint angles from the phase of the
+repetition. 25 movements cover the library — squat, lunge, push-up, plank,
+row, press, hinge, bridge, pull-up and so on — and an exercise is matched to
+one by id, falling back to its movement pattern.
+
+three.js is vendored at `vendor/three.module.min.js` (MIT, licence included)
+rather than loaded from a CDN, so the demonstrator works offline and does not
+depend on an external host. It is imported lazily the first time an exercise
+screen is opened, so it costs nothing on the landing page or the dashboard.
+
+Admins can override which movement an exercise demonstrates from the exercise
+editor; left on "Automatic" it is chosen from the exercise's pattern.
+
+If WebGL is unavailable, the import fails, or the browser asks for reduced
+motion, the screen keeps the static illustration instead — nothing breaks.
+
+Note this is a stylised mannequin, not a licensed photoreal model. It shows the
+movement clearly; it is not a substitute for the tutorial video link, which is
+why both are offered on the same screen.
+
 ## Data model
 
 | Collection | Document | Who can read | Who can write |
@@ -100,6 +126,7 @@ still see published plans.
 | `store.js` | User data — routes to the account or to this device |
 | `app.js` | Screens, router and the workout session |
 | `admin.js` | Admin panel |
+| `viewer3d.js`, `vendor/` | 3D exercise demonstrator and its vendored copy of three.js |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Installable app and offline support |
 | `firestore.rules` | Security rules |
 

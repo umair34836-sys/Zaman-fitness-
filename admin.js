@@ -207,6 +207,12 @@ const AdminPanel = (function () {
             <span class="option-copy"><span class="option-title">${esc(e.name)}</span></span></label>`).join('')}
         </div>
       </div>
+      <label class="field"><span>3D demonstration</span><select class="input" id="d-anim">
+        <option value="">Automatic (chosen from the pattern)</option>
+        ${(typeof Viewer3D !== 'undefined' ? Viewer3D.names() : []).map(n =>
+          `<option value="${attr(n)}" ${draft.anim === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+      </select></label>
+      <p class="hint">Which movement the animated model performs on the exercise screen.</p>
       <label class="field"><span>Tutorial video link</span><input class="input" id="d-video" type="url" value="${attr(draft.video || '')}" placeholder="https://www.youtube.com/watch?v=…"></label>
       <p class="hint">Left blank, the app sends users to a YouTube search for this exercise instead of a dead link.</p>`;
   }
@@ -275,6 +281,7 @@ const AdminPanel = (function () {
       draft.unit = (el('d-unit') || {}).value || 'reps';
       draft.load = val('d-load') || 'Bodyweight';
       draft.video = val('d-video');
+      draft.anim = (el('d-anim') || {}).value || '';
       draft.needs = [...document.querySelectorAll('.d-need')].filter(c => c.checked).map(c => c.value);
     } else {
       draft.name = val('d-name');

@@ -462,8 +462,9 @@ function sessionScreen() {
 
   // 'ready'
   return phone(`${head}<div class="screen no-nav">
-    <div class="illus"><svg viewBox="0 0 200 150" fill="none"><rect x="28" y="114" width="145" height="7" rx="3" fill="#9bb45d"/><path d="M60 113 82 68h37l22 45" stroke="#557817" stroke-width="7" stroke-linecap="round"/><circle cx="100" cy="48" r="15" fill="#c9d7a2"/><path d="M92 64 82 91m18-24 24 14m-34-7-20 22m40-12 15 29" stroke="#557817" stroke-width="7" stroke-linecap="round"/><path d="M42 77h115" stroke="#557817" stroke-width="6" stroke-linecap="round"/><path d="M38 67v20m124-20v20" stroke="#9aaf54" stroke-width="8" stroke-linecap="round"/></svg></div>
-    <div class="eyebrow">${item.warmup || s.exIndex === 0 ? 'Warm up' : 'Get ready'}</div>
+    <div class="illus" id="model-host" data-ex="${attr(ex.id)}"><svg viewBox="0 0 200 150" fill="none"><rect x="28" y="114" width="145" height="7" rx="3" fill="#9bb45d"/><path d="M60 113 82 68h37l22 45" stroke="#557817" stroke-width="7" stroke-linecap="round"/><circle cx="100" cy="48" r="15" fill="#c9d7a2"/><path d="M92 64 82 91m18-24 24 14m-34-7-20 22m40-12 15 29" stroke="#557817" stroke-width="7" stroke-linecap="round"/><path d="M42 77h115" stroke="#557817" stroke-width="6" stroke-linecap="round"/><path d="M38 67v20m124-20v20" stroke="#9aaf54" stroke-width="8" stroke-linecap="round"/></svg></div>
+    <div class="model-bar"><button class="chip" id="model-toggle" onclick="toggleModel(this)">Pause</button><span class="tiny">Drag the model to look around</span></div>
+    <div class="eyebrow">${ex.pattern === 'mobility' ? 'Warm up' : 'Get ready'}</div>
     <h1 class="h1">${esc(ex.name)}</h1>
     <p class="sub">${esc(ex.muscles)}</p>
     <div class="set-dots">${dots}</div>
@@ -591,6 +592,25 @@ function render() {
   const view = SCREENS[S.screen] || landingScreen;
   const root = el('app');
   if (root) root.innerHTML = view();
+  afterRender();
+}
+
+// The 3D demonstrator lives outside the HTML string, so it is attached (and
+// torn down) after each paint. Failure here must never break the screen.
+function afterRender() {
+  if (typeof Viewer3D === 'undefined') return;
+  Viewer3D.detach();
+  const host = el('model-host');
+  if (!host) return;
+  Viewer3D.mount(host, exerciseById(host.dataset.ex)).then(ok => {
+    const btn = el('model-toggle');
+    if (btn && !ok) btn.parentNode.style.display = 'none';   // fell back to the drawing
+  }).catch(() => {});
+}
+
+function toggleModel(btn) {
+  const playing = Viewer3D.toggle();
+  btn.textContent = playing ? 'Pause' : 'Play';
 }
 
 function go(screen) {
